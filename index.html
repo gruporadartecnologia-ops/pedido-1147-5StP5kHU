@@ -21,7 +21,7 @@ const PEDIDO = {
 
   // Itens: [ "produto", valor, "o que vem junto (opcional)" ]  — valor com ponto: 1999.90
   itens: [
-    ["Kit Starlink", 799, "antena, roteador, fonte e cabo"],
+    ["Kit Starlink Mini", 799, "antena com Wi-Fi integrado, suporte, fonte e cabo"],
     ["Instalação em casa", 100, ""],
   ],
 
@@ -31,11 +31,14 @@ const PEDIDO = {
 
   // ETAPA ATUAL — use uma destas palavras:
   // aguardando_pagamento | pago | encomendado | a_caminho | chegou | instalacao_agendada | concluido
-  etapa: "pago",
+  etapa: "a_caminho",
 
   data_pagamento: "31/10/2026",              // ex.: "01/11/2026"
   forma_pagamento: "PIX",          // "PIX", "Cartão" ou "Boleto" (aparece no comprovante)
   previsao_chegada: "",            // ex.: "06/11/2026"
+  transportadora: "Enviado por ônibus até Canaã dos Carajás",              // opcional: só se for enviado direto à cliente
+  rastreio: "",                    // opcional: código de rastreio
+  transporte_etiqueta: "Rodoviário",         // opcional: texto curto do campo TRANSPORTE na etiqueta
   instalacao_data: "",             // ex.: "07/11/2026"
   instalacao_hora: "",             // ex.: "09:00"
 
@@ -49,7 +52,7 @@ const PEDIDO = {
   pix_cidade: "",                  // cidade (até 15 letras)
   link_cartao: "",                 // link da maquininha para cartão parcelado
 
-  atualizado_em: "31/10/2026 22:15",
+  atualizado_em: "02/11/2026 12:00",
 };
 /* ===================================================================== */
 </script>
@@ -158,7 +161,8 @@ function detalhe(key) {
   switch (key) {
     case "aguardando_pagamento": return "Em " + P.data_pedido;
     case "pago": return P.data_pagamento ? "Em " + P.data_pagamento : "";
-    case "encomendado": return P.previsao_chegada ? "Previsão de chegada: " + P.previsao_chegada : "";
+    case "encomendado": return P.previsao_chegada ? "Previsão de chegada: " + P.previsao_chegada : "Prazo: até 5 dias úteis";
+    case "a_caminho": return P.transportadora ? P.transportadora + (P.rastreio ? " · Rastreio: " + P.rastreio : "") : (P.previsao_chegada ? "Previsão de chegada: " + P.previsao_chegada : "");
     case "chegou": return P.recebimento === "entrega" ? "Entraremos em contato para combinar o horário" : LOJA;
     case "instalacao_agendada": return P.instalacao_data ? P.instalacao_data + (P.instalacao_hora ? " às " + P.instalacao_hora : "") : "Entraremos em contato para agendar";
     case "concluido": return P.nota === "emitida" ? "Nota fiscal emitida" : "";
@@ -215,8 +219,9 @@ async function desenharComprovante() {
 
   // ---- faixa 2: dados rápidos ----
   const b1 = a1 + 76;
-  const cols = [["PAGAMENTO", "PAGO"], ["DATA DO PAGAMENTO", P.data_pagamento || "—"], ["FORMA", (P.forma_pagamento || "—").toUpperCase()], ["PRAZO", "ATÉ 5 DIAS ÚTEIS"], ["VOLUME", "1/1"]];
-  const cw = [190, 290, 180, 330, 162];
+  const transp = P.transporte_etiqueta ? P.transporte_etiqueta.toUpperCase().slice(0, 19) : P.transportadora ? P.transportadora.toUpperCase().slice(0, 18) : (ent ? "ENTREGA PRÓPRIA" : "RETIRADA NA LOJA");
+  const cols = [["PAGAMENTO", "PAGO"], ["DATA DO PAGAMENTO", P.data_pagamento || "—"], ["FORMA", (P.forma_pagamento || "—").toUpperCase()], ["TRANSPORTE", transp], ["PRAZO", "ATÉ 5 DIAS ÚTEIS"]];
+  const cw = [170, 260, 140, 300, 282];
   let cx0 = M;
   cols.forEach((cc, i) => { if (i) line(cx0, a1, cx0, b1, 2); T(cc[0], cx0 + 16, a1 + 28, `700 14px ${F}`); T(cc[1], cx0 + 16, a1 + 60, `700 24px ${F}`); cx0 += cw[i]; });
   line(M, b1, R, b1);
@@ -258,7 +263,7 @@ async function desenharComprovante() {
   T(CODIGO.split("").join(" "), W / 2, c1 + 176, `400 16px ${F}`, "center");
   const d1 = c1 + 196;
   line(M, d1, R, d1, 2);
-  T("Comprovante de pedido · Não substitui a nota fiscal", W / 2, d1 + 36, `400 16px ${F}`, "center");
+  T((P.rastreio ? "Rastreio: " + P.rastreio + "  ·  " : "") + "Comprovante de pedido · Não substitui a nota fiscal", W / 2, d1 + 36, `400 16px ${F}`, "center");
 
   const Hf = d1 + 56 + M;
   const out = document.createElement("canvas"); out.width = W; out.height = Hf;
@@ -312,6 +317,7 @@ function render() {
         <table>${P.itens.map(i => `<tr><td>${esc(i[0])}${i[2] ? `<div style="font-size:12.5px;color:var(--muted)">${esc(i[2])}</div>` : ""}</td><td>${Number(i[1]) ? brl(i[1]) : "—"}</td></tr>`).join("")}<tr class="t"><td>Total</td><td>${total ? brl(total) : "—"}</td></tr></table></div>
       <dl class="kv"><dt>Cliente</dt><dd>${esc(P.cliente_nome || P.cliente)}</dd><dt>CPF</dt><dd>${esc(P.documento)}</dd>
         <dt>Recebimento</dt><dd>${P.recebimento === "entrega" ? "Entrega · " + esc(P.endereco_entrega || "a combinar") : "Retirada na loja · " + LOJA}</dd>
+        ${P.transportadora ? `<dt>Transporte</dt><dd>${esc(P.transportadora)}${P.rastreio ? " · Rastreio: " + esc(P.rastreio) : ""}</dd>` : ""}
         ${P.instalacao ? `<dt>Instalação</dt><dd>${instNome}${P.instalacao_data ? " · " + esc(P.instalacao_data) + (P.instalacao_hora ? " às " + esc(P.instalacao_hora) : "") : " · a agendar"}</dd>` : ""}</dl>
     </section>
     ${atual >= 1 ? `<section class="sec"><h3>Comprovante de pedido</h3>
